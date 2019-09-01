@@ -33,20 +33,22 @@ def pre_process_image(image, row=32, col=32):
     return cv2.cvtColor(cv2.resize(image_cropped, (col, row)), cv2.COLOR_BGR2RGB)
 
 # Generator to yield images in batches
-def generator_images(data, img_path, row=32, col=32, batchSize = 32, steering_offset=0.25):
+def generator_images(data, img_path, row=32, col=32, batchSize=32, steering_offset=0.25):
     while True:
         data = shuffle(data)
-        for i in range(0, len(data), int(batchSize/4)):
+        for i in range(0, len(data), batchSize):
             X_batch = []
             y_batch = []
-            details = data[i: i+int(batchSize/4)]
-            for line in details:
+            for line in data[i:i+batchSize]:
                 image_center_path = img_path + line[0].split('/')[-1]
                 image_left_path = img_path + line[1].split('/')[-1]
                 image_right_path = img_path + line[2].split('/')[-1]
               
-                if not os.path.isfile(image_center_path) or not os.path.isfile(image_left_path) or not os.path.isfile(image_right_path):
-                  continue
+                if not os.path.isfile(image_center_path) \
+                    or not os.path.isfile(image_left_path) \
+                    or not os.path.isfile(image_right_path):
+                    print("File Not Found!\n")
+                    continue
                 
                 # Center Camera
                 image = cv2.imread(image_center_path)
@@ -96,28 +98,29 @@ def base_model(row, col, dropout_rate):
     return model
 
 def model_nvidia(row, col, dropout_rate):
-    input_shape = (64,64,3)
     model = Sequential()
-    model.add(Lambda(lambda x: x/255 - 0.5, input_shape=(row, col, 4)))
-    model.add(Convolution2D(24, 5, 5, border_mode='valid', subsample =(2,2), W_regularizer = l2(0.001)))
+    model.add(Lambda(lambda x: x/255 - 0.5, input_shape=(row, col, 3)))
+    model.add(Conv2D(24, (5, 5), kernel_regularizer = l2(0.001), strides=(2, 2), padding="valid"))
     model.add(Activation('relu'))
-    model.add(Convolution2D(36, 5, 5, border_mode='valid', subsample =(2,2), W_regularizer = l2(0.001)))
+    model.add(Conv2D(36, (5, 5), kernel_regularizer = l2(0.001), strides=(2, 2), padding="valid"))
     model.add(Activation('relu'))
-    model.add(Convolution2D(48, 5, 5, border_mode='valid', subsample = (2,2), W_regularizer = l2(0.001)))
+    model.add(Conv2D(48, (5, 5), kernel_regularizer = l2(0.001), strides=(2, 2), padding="valid"))
     model.add(Activation('relu'))
-    model.add(Convolution2D(64, 3, 3, border_mode='same', subsample = (2,2), W_regularizer = l2(0.001)))
+    model.add(Conv2D(64, (3, 3), kernel_regularizer = l2(0.001), strides=(2, 2), padding="same"))
     model.add(Activation('relu'))
-    model.add(Convolution2D(64, 3, 3, border_mode='valid', subsample = (2,2), W_regularizer = l2(0.001)))
+    model.add(Conv2D(64, (3, 3), kernel_regularizer = l2(0.001), strides=(2, 2), padding="valid"))
     model.add(Activation('relu'))
     model.add(Flatten())
-    model.add(Dense(80, W_regularizer = l2(0.001)))
+    model.add(Dense(80, kernel_regularizer = l2(0.001)))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(40, W_regularizer = l2(0.001)))
+    model.add(Dense(40, kernel_regularizer = l2(0.001)))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(16, W_regularizer = l2(0.001)))
+    model.add(Dense(16, kernel_regularizer = l2(0.001)))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(10, W_regularizer = l2(0.001)))
-    model.add(Dense(1, W_regularizer = l2(0.001)))
+    model.add(Dense(10, kernel_regularizer = l2(0.001)))
+    model.add(Dense(1, kernel_regularizer = l2(0.001)))
+    
+    return model
 
 
 if __name__ == "__main__":
@@ -132,7 +135,7 @@ if __name__ == "__main__":
     # Hyper Parameters for the training
     BATCH_SIZE = 32
     ALPHA = 0.001
-    EPOCHS = 1
+    EPOCHS = 2
     DROPOUT = 0.4
     row = 64
     col = 64
@@ -142,18 +145,20 @@ if __name__ == "__main__":
     
     # Create Training and Validation sets
     training_data, validation_data = train_test_split(lines, test_size = 0.2)
+    print(len(training_data))
 
     # Create the model
-    model = base_model(row, col, DROPOUT)
+#     model = base_model(row, col, DROPOUT)
+    model = model_nvidia(row, col, DROPOUT)
     
     # Compile the model and fit using the Generator
     adam = Adam(lr=ALPHA)
     model.compile(optimizer=adam, loss='mse', metrics=['mae'])
     model.fit_generator(generator_images(training_data, data_img, row, col),
-                        steps_per_epoch=math.ceil(len(training_data)*4), 
+                        steps_per_epoch=math.ceil(len(training_data)/BATCH_SIZE), 
                         epochs=EPOCHS, 
                         validation_data=generator_images(validation_data, data_img, row, col), 
                         validation_steps=len(validation_data))
 
     # Save the model
-    model.save('model.h5')
+    model.save('model_nvidia.h5')
