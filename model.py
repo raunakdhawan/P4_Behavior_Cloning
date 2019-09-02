@@ -67,19 +67,19 @@ def generator_images(data, img_path, row=32, col=32, batchSize=32, steering_offs
                 X_batch.append(image_l)
                 y_batch.append(steering_angle + steering_offset)
 
-                # Left Camera with flipped Image
-                X_batch.append(np.fliplr(image_l))
-                y_batch.append(-steering_angle - steering_offset)
+#                 # Left Camera with flipped Image
+#                 X_batch.append(np.fliplr(image_l))
+#                 y_batch.append(-steering_angle - steering_offset)
                 
                 # Right Camera
                 image_r = cv2.imread(image_right_path)
                 image_r = pre_process_image(image_r, row, col)
                 X_batch.append(image_r)
-                y_batch.append(-steering_angle)
+                y_batch.append(steering_angle - steering_offset)
 
-                # Right Camera with flipped Image
-                X_batch.append(np.fliplr(image_r))
-                y_batch.append(-steering_angle + steering_offset)
+#                 # Right Camera with flipped Image
+#                 X_batch.append(np.fliplr(image_r))
+#                 y_batch.append(-steering_angle + steering_offset)
             
             # converting to numpy array
             X_batch = np.array(X_batch)
@@ -94,30 +94,52 @@ def base_model(row, col, dropout_rate):
     model.add(Dropout(dropout_rate))
     model.add(MaxPooling2D((2,2)))
     model.add(Flatten())
+    model.add(Dense(80, activation='relu', kernel_regularizer = l2(0.001)))
+    model.add(Dropout(dropout_rate))
+    model.add(Dense(40,activation='relu', kernel_regularizer = l2(0.001)))
+    model.add(Dropout(dropout_rate))
+    model.add(Dense(16, activation='relu', kernel_regularizer = l2(0.001)))
+    model.add(Dropout(dropout_rate))
+    model.add(Dense(10, activation='relu', kernel_regularizer = l2(0.001)))
     model.add(Dense(1))
     return model
 
 def model_nvidia(row, col, dropout_rate):
     model = Sequential()
     model.add(Lambda(lambda x: x/255 - 0.5, input_shape=(row, col, 3)))
-    model.add(Conv2D(24, (5, 5), kernel_regularizer = l2(0.001), strides=(2, 2), padding="valid"))
-    model.add(Activation('relu'))
-    model.add(Conv2D(36, (5, 5), kernel_regularizer = l2(0.001), strides=(2, 2), padding="valid"))
-    model.add(Activation('relu'))
-    model.add(Conv2D(48, (5, 5), kernel_regularizer = l2(0.001), strides=(2, 2), padding="valid"))
-    model.add(Activation('relu'))
-    model.add(Conv2D(64, (3, 3), kernel_regularizer = l2(0.001), strides=(2, 2), padding="same"))
-    model.add(Activation('relu'))
-    model.add(Conv2D(64, (3, 3), kernel_regularizer = l2(0.001), strides=(2, 2), padding="valid"))
-    model.add(Activation('relu'))
+    model.add(Conv2D(24, (5, 5), 
+                     kernel_regularizer = l2(0.001), 
+                     strides=(2, 2), 
+                     padding="valid",
+                     activation='relu'))
+    model.add(Conv2D(36, (5, 5), 
+                     kernel_regularizer = l2(0.001), 
+                     strides=(2, 2), 
+                     padding="valid", 
+                     activation='relu'))
+    model.add(Conv2D(48, (5, 5), 
+                     kernel_regularizer = l2(0.001), 
+                     strides=(2, 2), 
+                     padding="valid", 
+                     activation='relu'))
+    model.add(Conv2D(64, (3, 3), 
+                     kernel_regularizer = l2(0.001), 
+                     strides=(2, 2), 
+                     padding="same", 
+                     activation='relu'))
+    model.add(Conv2D(64, (3, 3), 
+                     kernel_regularizer = l2(0.001), 
+                     strides=(2, 2), 
+                     padding="valid", 
+                     activation='relu'))
     model.add(Flatten())
-    model.add(Dense(80, kernel_regularizer = l2(0.001)))
+    model.add(Dense(80, activation='relu', kernel_regularizer = l2(0.001)))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(40, kernel_regularizer = l2(0.001)))
+    model.add(Dense(40,activation='relu', kernel_regularizer = l2(0.001)))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(16, kernel_regularizer = l2(0.001)))
+    model.add(Dense(16, activation='relu', kernel_regularizer = l2(0.001)))
     model.add(Dropout(dropout_rate))
-    model.add(Dense(10, kernel_regularizer = l2(0.001)))
+    model.add(Dense(10, activation='relu', kernel_regularizer = l2(0.001)))
     model.add(Dense(1, kernel_regularizer = l2(0.001)))
     
     return model
@@ -134,9 +156,10 @@ if __name__ == "__main__":
     
     # Hyper Parameters for the training
     BATCH_SIZE = 32
-    ALPHA = 0.001
-    EPOCHS = 2
+    ALPHA = 0.0001
+    EPOCHS = 5
     DROPOUT = 0.4
+    STEER_OFFSET = 0.25
     row = 64
     col = 64
     
@@ -148,17 +171,18 @@ if __name__ == "__main__":
     print(len(training_data))
 
     # Create the model
-#     model = base_model(row, col, DROPOUT)
-    model = model_nvidia(row, col, DROPOUT)
+    model = base_model(row, col, DROPOUT)
+#     model = model_nvidia(row, col, DROPOUT)
     
     # Compile the model and fit using the Generator
     adam = Adam(lr=ALPHA)
     model.compile(optimizer=adam, loss='mse', metrics=['mae'])
-    model.fit_generator(generator_images(training_data, data_img, row, col),
+    model.fit_generator(generator_images(training_data, data_img, row, col, BATCH_SIZE, STEER_OFFSET),
                         steps_per_epoch=math.ceil(len(training_data)/BATCH_SIZE), 
                         epochs=EPOCHS, 
                         validation_data=generator_images(validation_data, data_img, row, col), 
                         validation_steps=len(validation_data))
 
     # Save the model
+#     model.save('model.h5')
     model.save('model_nvidia.h5')
