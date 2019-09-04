@@ -7,7 +7,7 @@ import random
 from sklearn.utils import shuffle
 from sklearn.model_selection import train_test_split
 from keras.models import Sequential
-from keras.layers import Conv2D, Dropout, MaxPooling2D, Flatten, Activation, Dense, Cropping2D, Lambda, ELU
+from keras.layers import Conv2D, Dropout, MaxPooling2D, Flatten, Activation, Dense, Cropping2D, Lambda, ELU, Reshape
 from keras.optimizers import Adam
 from keras.regularizers import l2
 import os
@@ -28,12 +28,13 @@ def read_csv_log(csv_path):
     return lines            
 
 # Crop and Resize the images
-def pre_process_image(image, row=32, col=32):
-    image_cropped = image[80:140,:]
+def pre_process_image(image, top, bottom, row, col):
+    image_cropped = image[top:bottom,:]
     return cv2.cvtColor(cv2.resize(image_cropped, (col, row)), cv2.COLOR_BGR2RGB)
 
 # Generator to yield images in batches
-def generator_images(data, img_path, row=32, col=32, batchSize=32, steering_offset=0.25):
+# def generator_images(data, img_path, row=32, col=32, batchSize=32, steering_offset=0.25):
+def generator_images(data, img_path, top=65, bottom=130, row=64, col=64, batchSize=32, steering_offset=0.25):
     while True:
         data = shuffle(data)
         for i in range(0, len(data), batchSize):
@@ -52,7 +53,7 @@ def generator_images(data, img_path, row=32, col=32, batchSize=32, steering_offs
                 
                 # Center Camera
                 image = cv2.imread(image_center_path)
-                image = pre_process_image(image, row, col)
+                image = pre_process_image(image, top, bottom, row, col)
                 steering_angle = float(line[3])
                 X_batch.append(image)
                 y_batch.append(steering_angle)
@@ -63,23 +64,25 @@ def generator_images(data, img_path, row=32, col=32, batchSize=32, steering_offs
                 
                 # Left Camera
                 image_l = cv2.imread(image_left_path)
-                image_l = pre_process_image(image_l, row, col)
+                image_l = pre_process_image(image_l, top, bottom, row, col)
                 X_batch.append(image_l)
                 y_batch.append(steering_angle + steering_offset)
+                    
 
-#                 # Left Camera with flipped Image
-#                 X_batch.append(np.fliplr(image_l))
-#                 y_batch.append(-steering_angle - steering_offset)
+                # Left Camera with flipped Image
+                X_batch.append(np.fliplr(image_l))
+                y_batch.append(-steering_angle - steering_offset)
                 
                 # Right Camera
                 image_r = cv2.imread(image_right_path)
-                image_r = pre_process_image(image_r, row, col)
+                image_r = pre_process_image(image_r, top, bottom, row, col)
                 X_batch.append(image_r)
                 y_batch.append(steering_angle - steering_offset)
+                
 
-#                 # Right Camera with flipped Image
-#                 X_batch.append(np.fliplr(image_r))
-#                 y_batch.append(-steering_angle + steering_offset)
+                # Right Camera with flipped Image
+                X_batch.append(np.fliplr(image_r))
+                y_batch.append(-steering_angle + steering_offset)
             
             # converting to numpy array
             X_batch = np.array(X_batch)
@@ -87,10 +90,16 @@ def generator_images(data, img_path, row=32, col=32, batchSize=32, steering_offs
             yield shuffle(X_batch, y_batch)
 
 
-def base_model(row, col, dropout_rate):
+def base_model(row, col, dropout_rate, top=65, bottom=130, image_shape=(160, 320, 3)):
     model = Sequential()
-    model.add(Lambda(lambda x: x /255.0 - 0.5, input_shape=(row, col,3) ))  # With data normalization
-    model.add(Conv2D(15, (3, 3), activation="relu", strides=(2, 2)))
+    model.add(Lambda(lambda x: x/255.0 - 0.5, input_shape=(row, col, 3)))  # Normalize Data
+    model.add(Cropping2D(cropping=((top, bottom), (0, 0)), input_shape=image_shape)) # crop off top and bottom pixels
+    model.add(Conv2D(15, (3, 3), 
+                     activation="relu", 
+                     strides=(2, 2)))
+    model.add(Conv2D(24, (5, 5), 
+                     activation='relu',
+                     strides=(2, 2)))
     model.add(Dropout(dropout_rate))
     model.add(MaxPooling2D((2,2)))
     model.add(Flatten())
@@ -104,7 +113,7 @@ def base_model(row, col, dropout_rate):
     model.add(Dense(1))
     return model
 
-def model_nvidia(row, col, dropout_rate):
+def model_nvidia(row, col, dropout_rate,):
     model = Sequential()
     model.add(Lambda(lambda x: x/255 - 0.5, input_shape=(row, col, 3)))
     model.add(Conv2D(24, (5, 5), 
@@ -147,42 +156,46 @@ def model_nvidia(row, col, dropout_rate):
 
 if __name__ == "__main__":
     # Path to the csv log
-    data_log_csv = '/opt/carnd_p3/data/driving_log.csv'
+    data_log_csv = './data/driving_log.csv'
     # data_log_csv = './data/driving_log.csv'
 
     # Path to the images folder
-    data_img = '/opt/carnd_p3/data/IMG/'
+    data_img = './data/IMG/'
     # data_img = './data/IMG/'
     
     # Hyper Parameters for the training
     BATCH_SIZE = 32
     ALPHA = 0.0001
-    EPOCHS = 5
+    EPOCHS = 10
     DROPOUT = 0.4
-    STEER_OFFSET = 0.25
+    STEER_OFFSET = 0.3
+    top = 65
+    bottom = 130
     row = 64
     col = 64
+#     image_shape = (160, 320, 3)
     
     # Read the csv data
     lines = read_csv_log(data_log_csv)
     
     # Create Training and Validation sets
     training_data, validation_data = train_test_split(lines, test_size = 0.2)
-    print(len(training_data))
 
     # Create the model
-    model = base_model(row, col, DROPOUT)
-#     model = model_nvidia(row, col, DROPOUT)
+#     model = base_model(row, col, DROPOUT)
+    model = model_nvidia(row, col, DROPOUT)
     
     # Compile the model and fit using the Generator
     adam = Adam(lr=ALPHA)
     model.compile(optimizer=adam, loss='mse', metrics=['mae'])
-    model.fit_generator(generator_images(training_data, data_img, row, col, BATCH_SIZE, STEER_OFFSET),
+#     model.fit_generator(generator_images(training_data, data_img, row, col, BATCH_SIZE, STEER_OFFSET),
+    model.fit_generator(generator_images(training_data, data_img, top, bottom, row, col, BATCH_SIZE, STEER_OFFSET),
                         steps_per_epoch=math.ceil(len(training_data)/BATCH_SIZE), 
                         epochs=EPOCHS, 
-                        validation_data=generator_images(validation_data, data_img, row, col), 
+                        validation_data=generator_images(validation_data, data_img, top, bottom, row, col, BATCH_SIZE, STEER_OFFSET), 
                         validation_steps=len(validation_data))
 
     # Save the model
 #     model.save('model.h5')
-    model.save('model_nvidia.h5')
+#     model.save('model_nvidia.h5')
+    model.save('test.h5')
