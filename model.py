@@ -168,7 +168,7 @@ if __name__ == "__main__":
     ALPHA = 0.0001
     EPOCHS = 10
     DROPOUT = 0.4
-    STEER_OFFSET = 0.3
+    STEER_OFFSET = 0.25
     top = 65
     bottom = 130
     row = 64
@@ -198,4 +198,4 @@ if __name__ == "__main__":
     # Save the model
 #     model.save('model.h5')
 #     model.save('model_nvidia.h5')
-    model.save('test.h5')
+    model.save('test_25.h5')
