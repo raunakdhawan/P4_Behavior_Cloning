@@ -92,4 +92,6 @@ Also the model seemed to not detect changes in the road or the boundaries. With 
 - The input is provided to the neural network by using python generator so as to efficiently use the memory provided in the workspace. 
 
 ### 3. Final Solution
-Here is the link to the [final resulting video](./output_video.mp4)
+- The link to the video : [final resulting video](./output_video.mp4)
+- The link to the python file : [model.py](./model.py)
+- The link to the trained model : [test.h5](./test.h5)
