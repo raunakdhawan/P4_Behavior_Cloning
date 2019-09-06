@@ -49,6 +49,22 @@ The following parameters are used in the model
 
 **Input image to the network** : First the top 65 pixels and bottom 130 pixels are removed to remove the horizon and the front of the car. The cropped image is the resized to an image of size (64, 64, 3). This is given as an input to the neural network.
 
+### 4. Generator
+A generator funciton is created in order to generate the batch of images to be fed into the neural network. It helps utilizing the memory efficiently. As the batches are being created here, the addition of recovery images is also done in the generator function.
+1. First the data is shuffled (avoid biasing)
+2. The images from the center, right and left cameras are read using the `cv2.imread`
+3. The images are processed
+    - Cropped
+    - Resized
+    - Converted from BGR to RGB (not really needed but helps in plotting)
+4. The center image and the steering angle are added to the batch
+5. Also, the center image is flipped horizontally and the steering angle is multiplied with -1, then added to the batch.
+6. Recovery : The offset is added to the left camera image and added to the batch
+7. Recovery : The offset is subtracted from the right camera image and added to the batch
+8. Recovery : The left camera image is flipped horizontally and the calculated steering angle with the offset is multiplied with -1 and added to the batch
+9. Recovery : The right camera image is flipped horizontally and the calculated steering angle with the offset is multiplied with -1 and added to the batch
+10. The batch is yieldid.
+
 ## Model Architecture and Training Strategy
 
 ### 1. Solution Design Approach
