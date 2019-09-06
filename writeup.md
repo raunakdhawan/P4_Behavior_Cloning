@@ -27,6 +27,8 @@ Total params: 140,625
 Trainable params: 140,625
 Non-trainable params: 0
 
+The Lambda layer at the start of the network is to normalize the input batch. So that the values are between -1 and 1. This is done by dividing by 255 and subtracting 1.0 from the result.
+
 ### 2. Avoiding of Overfitting
 In order to avoid overfitting, dropouts are introduced in the Fully Connected Layes. Also in addition to dropout, L2 regularization is introduced, as the network will be trained on 9 laps of the same track with 10 epochs. With both the Dropout and the L2 Regularization, the Overfitting is reduced.
 
@@ -45,6 +47,8 @@ The following parameters are used in the model
 | Validation Size    | 0.2                |
 | Loss Function      | Meas Squared Error |
 
+**Input image to the network** : First the top 65 pixels and bottom 130 pixels are removed to remove the horizon and the front of the car. The cropped image is the resized to an image of size (64, 64, 3). This is given as an input to the neural network.
+
 ## Model Architecture and Training Strategy
 
 ### 1. Solution Design Approach
@@ -60,8 +64,16 @@ The first step was to just create a base model and get a baseline that I would u
 | dense_1 (Dense)               | (None, 10)         | 170     |
 | dense_1 (Dense)               | (None, 1)          | 11      |
 
-The above model was trained only on the data provided by Udacity
+The above model was trained only on the data provided by Udacity. After training and testing, it seemd that the data was not enough as the car was not recovering from the turns. Looking at the data from Udacity, the number of images with straight steering angles (== 0) were more than left or right steering angels. Hence the model was biased as the data is biases.
+
+In order to remove the data bias, driving around the track was done and the images with the steering angles were recorded. Around three laps were done both the directions. This helped collect lots of unbiased data.
+
+Also the model seemed to not detect changes in the road or the boundaries. With this model, the car was able to take the first left turn (as it can be done with smaller steering angles and the scene is not changing much), but once it reaches the bridge (even though it is straight) the car acts weird and the next left turn it does not detect the left, but sees the opening as the straight road. This meant creating a little bit more complicated NN. The neural network is adapted from the Nvidia neural network.
 
 ### 2. Creation of the Training Set & Training Process
+- As mentioned before the training data was created by driving around the track atleast three times in both direction. This data was combined with the data provided by Udacity. 
+- The data is divided into training set and validation set. The data is given as input to the neural network in a batch of 32 normalized images. 
+- The input is provided to the neural network by using python generator so as to efficiently use the memory provided in the workspace. 
 
 ### 3. Final Solution
+Here is the link to the [final resulting video](./output_video.mp4)

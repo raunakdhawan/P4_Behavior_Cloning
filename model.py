@@ -198,4 +198,4 @@ if __name__ == "__main__":
     # Save the model
 #     model.save('model.h5')
 #     model.save('model_nvidia.h5')
-    model.save('test_25.h5')
+    model.save('test.h5')
